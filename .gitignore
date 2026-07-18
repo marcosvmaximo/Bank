@@ -1,0 +1,57 @@
+# =========================
+# .NET / C#
+# =========================
+bin/
+obj/
+TestResults/
+*.log
+# Ignora configurações locais/secrets, mas mantém o arquivo base
+appsettings.Development.json
+appsettings.Local.json
+
+# =========================
+# Angular / Node.js
+# =========================
+node_modules/
+dist/
+tmp/
+out-tsc/
+.angular/
+npm-debug.log
+yarn-error.log
+
+# =========================
+# IDEs / Ferramentas
+# =========================
+.vs/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+# Mantém configs de time do VS Code, mas ignora o resto
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# =========================
+# Infraestrutura / Secrets
+# =========================
+.env
+.env.local
+.env.development
+*.pem
+*.key
+docker-compose.override.yml
+
+# =========================
+# Sistemas Operacionais
+# =========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
