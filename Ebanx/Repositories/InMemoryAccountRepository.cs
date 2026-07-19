@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
-using Ebanx.Domain;
+using Ebanx.Models;
 
 namespace Ebanx.Repositories;
 
 public class InMemoryAccountRepository : IAccountRepository
 {
-    // Stores balance per account ID. Using decimal for monetary precision.
     private readonly ConcurrentDictionary<string, decimal> _store = new();
+    private readonly ConcurrentDictionary<string, object> _lockObjects = new();
 
     public Account? GetById(string id)
     {
@@ -31,9 +31,12 @@ public class InMemoryAccountRepository : IAccountRepository
             ? (originId, destinationId)
             : (destinationId, originId);
 
-        lock (string.Intern(firstId))
+        var firstLock = _lockObjects.GetOrAdd(firstId, _ => new object());
+        var secondLock = _lockObjects.GetOrAdd(secondId, _ => new object());
+
+        lock (firstLock)
         {
-            lock (string.Intern(secondId))
+            lock (secondLock)
             {
                 if (!_store.TryGetValue(originId, out var originBalance))
                     return false;

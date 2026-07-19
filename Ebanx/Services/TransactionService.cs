@@ -1,18 +1,25 @@
-using Ebanx.Domain;
+using Ebanx.DTOs;
+using Ebanx.Models;
 using Ebanx.Repositories;
 
 namespace Ebanx.Services;
 
-/// <summary>
-/// Encapsulates all financial transaction business rules.
-/// The HTTP layer delegates here — no business logic lives in the controller.
-/// </summary>
 public class TransactionService(IAccountRepository repository)
 {
-    /// <summary>
-    /// Deposits <paramref name="amount"/> into <paramref name="destinationId"/>.
-    /// Creates the account if it does not exist (upsert semantics per the spec).
-    /// </summary>
+    public EventResponse? ProcessEvent(EventRequest request)
+    {
+        if (request.Amount <= 0)
+            throw new ArgumentException("Amount must be greater than zero.");
+
+        return request.Type switch
+        {
+            "deposit" => HandleDeposit(request),
+            "withdraw" => HandleWithdraw(request),
+            "transfer" => HandleTransfer(request),
+            _ => throw new ArgumentException("Unknown event type.")
+        };
+    }
+    
     public Account Deposit(string destinationId, decimal amount)
     {
         var existing = repository.GetById(destinationId);
@@ -20,10 +27,6 @@ public class TransactionService(IAccountRepository repository)
         return repository.Upsert(new Account(destinationId, newBalance));
     }
 
-    /// <summary>
-    /// Withdraws <paramref name="amount"/> from <paramref name="originId"/>.
-    /// Returns null when the account does not exist or has insufficient funds.
-    /// </summary>
     public Account? Withdraw(string originId, decimal amount)
     {
         var existing = repository.GetById(originId);
@@ -36,10 +39,6 @@ public class TransactionService(IAccountRepository repository)
         return repository.Upsert(existing with { Balance = existing.Balance - amount });
     }
 
-    /// <summary>
-    /// Atomically transfers <paramref name="amount"/> from origin to destination.
-    /// Returns null for both when origin does not exist or has insufficient funds.
-    /// </summary>
     public (Account? Origin, Account? Destination) Transfer(
         string originId, string destinationId, decimal amount)
     {
@@ -49,13 +48,53 @@ public class TransactionService(IAccountRepository repository)
         return success ? (origin, destination) : (null, null);
     }
 
-    /// <summary>
-    /// Returns the account by ID. Pure read — no side effects.
-    /// </summary>
     public Account? GetAccount(string id) => repository.GetById(id);
 
-    /// <summary>
-    /// Clears all accounts from the store.
-    /// </summary>
     public void Reset() => repository.Reset();
+    
+    private EventResponse HandleDeposit(EventRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Destination))
+            throw new ArgumentException("Destination is required.");
+
+        var account = Deposit(request.Destination, request.Amount);
+        return new EventResponse 
+        { 
+            Destination = new AccountDto { Id = account.Id, Balance = account.Balance } 
+        };
+    }
+
+    private EventResponse? HandleWithdraw(EventRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Origin))
+            throw new ArgumentException("Origin is required.");
+
+        var account = Withdraw(request.Origin, request.Amount);
+
+        if (account is null) return null;
+
+        return new EventResponse 
+        { 
+            Origin = new AccountDto { Id = account.Id, Balance = account.Balance } 
+        };
+    }
+
+    private EventResponse? HandleTransfer(EventRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Origin) || string.IsNullOrWhiteSpace(request.Destination))
+            throw new ArgumentException("Origin and Destination are required.");
+
+        if (request.Origin == request.Destination)
+            throw new ArgumentException("Origin and Destination must be different accounts.");
+
+        var (origin, destination) = Transfer(request.Origin, request.Destination, request.Amount);
+
+        if (origin is null) return null;
+
+        return new EventResponse
+        {
+            Origin = new AccountDto { Id = origin.Id, Balance = origin.Balance },
+            Destination = new AccountDto { Id = destination!.Id, Balance = destination.Balance }
+        };
+    }
 }

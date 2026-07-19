@@ -1,4 +1,4 @@
-using Ebanx.Domain;
+using Ebanx.Models;
 
 namespace Ebanx.Repositories;
 
