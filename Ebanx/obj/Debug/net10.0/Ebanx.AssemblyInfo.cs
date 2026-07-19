@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Ebanx")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+382a5f7492c06c2424cb960f1a12a5c1c345e3b9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b09dd412ac7f0376d7300a91c801276a19ca1ae3")]
 [assembly: System.Reflection.AssemblyProductAttribute("Ebanx")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Ebanx")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

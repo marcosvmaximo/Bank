@@ -11,7 +11,7 @@ builder.Services.AddScoped<TransactionService>();
 
 var app = builder.Build();
 
-app.MapEndpoints();
+app.MapControllers();
 
 app.Run();
 

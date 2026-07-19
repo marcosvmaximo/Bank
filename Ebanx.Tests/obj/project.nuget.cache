@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "KXsucKoeR6I=",
+  "dgSpecHash": "mxe+266n3Sg=",
   "success": true,
-  "projectFilePath": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx.Tests/Ebanx.Tests.csproj",
+  "projectFilePath": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx.Tests/Ebanx.Tests.csproj",
   "expectedPackageFiles": [
     "/Users/marcosmaximo/.nuget/packages/coverlet.collector/6.0.4/coverlet.collector.6.0.4.nupkg.sha512",
     "/Users/marcosmaximo/.nuget/packages/microsoft.aspnetcore.mvc.testing/10.0.10/microsoft.aspnetcore.mvc.testing.10.0.10.nupkg.sha512",
@@ -57,9 +57,9 @@
       "code": "NU1903",
       "level": "Warning",
       "message": "Package 'Microsoft.OpenApi' 2.0.0 has a known high severity vulnerability, https://github.com/advisories/GHSA-v5pm-xwqc-g5wc",
-      "projectPath": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx.Tests/Ebanx.Tests.csproj",
+      "projectPath": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx.Tests/Ebanx.Tests.csproj",
       "warningLevel": 1,
-      "filePath": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx.Tests/Ebanx.Tests.csproj",
+      "filePath": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx.Tests/Ebanx.Tests.csproj",
       "libraryId": "Microsoft.OpenApi",
       "targetGraphs": [
         "net10.0"

@@ -2639,11 +2639,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx.Tests/Ebanx.Tests.csproj",
+      "projectUniqueName": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx.Tests/Ebanx.Tests.csproj",
       "projectName": "Ebanx.Tests",
-      "projectPath": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx.Tests/Ebanx.Tests.csproj",
+      "projectPath": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx.Tests/Ebanx.Tests.csproj",
       "packagesPath": "/Users/marcosmaximo/.nuget/packages/",
-      "outputPath": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx.Tests/obj/",
+      "outputPath": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx.Tests/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/Users/marcosmaximo/.nuget/NuGet/NuGet.Config"
@@ -2658,8 +2658,8 @@
         "net10.0": {
           "targetAlias": "net10.0",
           "projectReferences": {
-            "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx/Ebanx.csproj": {
-              "projectPath": "/Users/marcosmaximo/RiderProjects/Ebanx/Ebanx/Ebanx.csproj"
+            "/Users/marcosmaximo/RiderProjects/Bank/Ebanx/Ebanx.csproj": {
+              "projectPath": "/Users/marcosmaximo/RiderProjects/Bank/Ebanx/Ebanx.csproj"
             }
           }
         }
