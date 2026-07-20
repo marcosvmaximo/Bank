@@ -5,28 +5,35 @@ namespace Ebanx.Infrastructure;
 
 public class UnitOfWork : IUnitOfWork
 {
-    // Um objeto de lock por conta, compartilhado entre todas as operações
-    private readonly ConcurrentDictionary<string, object> _lockObjects = new();
+    private readonly ConcurrentDictionary<string, object> _locks = new();
 
     public T Execute<T>(IEnumerable<string> accountIds, Func<T> operation)
     {
         // Ordena os IDs para garantir ordem de aquisição de locks consistente — previne deadlock
-        var orderedLocks = accountIds
+        var locks = accountIds
             .Distinct()
             .OrderBy(id => id, StringComparer.Ordinal)
-            .Select(id => _lockObjects.GetOrAdd(id, _ => new object()))
-            .ToList();
+            .Select(id => _locks.GetOrAdd(id, _ => new object()))
+            .ToArray();
 
-        return AcquireAndExecute(orderedLocks, 0, operation);
-    }
+        var locksAcquired = 0;
+        try
+        {
+            foreach (var lockObj in locks)
+            {
+                Monitor.Enter(lockObj);
+                locksAcquired++;
+            }
 
-    // Aquisição recursiva: cada nível de recursão adquire um lock e passa para o próximo
-    private static T AcquireAndExecute<T>(List<object> locks, int index, Func<T> operation)
-    {
-        if (index == locks.Count)
             return operation();
-
-        lock (locks[index])
-            return AcquireAndExecute(locks, index + 1, operation);
+        }
+        finally
+        {
+            // Libera de trás para frente, na ordem inversa da aquisição
+            for (var i = locksAcquired - 1; i >= 0; i--)
+            {
+                Monitor.Exit(locks[i]);
+            }
+        }
     }
 }
