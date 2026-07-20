@@ -24,13 +24,12 @@ public class UnitOfWorkTests
         {
             uow.Execute(["A"], () =>
             {
-                Thread.Sleep(100); // Segura o lock
+                Thread.Sleep(100);
                 executionOrder.Add(1);
                 return true;
             });
         });
 
-        // Aguarda um instante para garantir que task1 entrou primeiro no lock
         await Task.Delay(20);
 
         var task2 = Task.Run(() =>
@@ -55,7 +54,6 @@ public class UnitOfWorkTests
         Assert.Throws<InvalidOperationException>(() =>
             uow.Execute<int>(["A", "B"], () => throw new InvalidOperationException("Erro simulado")));
 
-        // Verifica se os locks foram liberados executando nova operação sem travar
         var completed = false;
         var task = Task.Run(() =>
         {
@@ -71,7 +69,6 @@ public class UnitOfWorkTests
     {
         var uow = new UnitOfWork();
 
-        // Passando ["A", "A"] não deve tentar dar lock duplo problemático nem falhar
         var result = uow.Execute(["A", "A"], () => 42);
 
         Assert.Equal(42, result);

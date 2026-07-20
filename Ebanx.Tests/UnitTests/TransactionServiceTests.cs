@@ -34,7 +34,7 @@ public class TransactionServiceTests
 
         var account = service.Deposit("100", 15.25m);
 
-        Assert.Equal(3525L, account.BalanceInCents); // $35.25
+        Assert.Equal(3525L, account.BalanceInCents);
         Assert.Equal(35.25m, service.GetBalance("100"));
     }
 
@@ -47,7 +47,7 @@ public class TransactionServiceTests
         var account = service.Withdraw("100", 20m);
 
         Assert.NotNull(account);
-        Assert.Equal(3000L, account.BalanceInCents); // $30.00
+        Assert.Equal(3000L, account.BalanceInCents);
     }
 
     [Fact]

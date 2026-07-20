@@ -27,7 +27,7 @@ public class AccountTests
     {
         var account = Account.CreateNew("100");
 
-        account.Deposit(1500L); // $15.00
+        account.Deposit(1500L);
 
         Assert.Equal(1500L, account.BalanceInCents);
     }
@@ -47,9 +47,9 @@ public class AccountTests
     public void Withdraw_SufficientFunds_ShouldDecreaseBalance()
     {
         var account = Account.CreateNew("100");
-        account.Deposit(5000L); // $50.00
+        account.Deposit(5000L);
 
-        account.Withdraw(2000L); // $20.00
+        account.Withdraw(2000L);
 
         Assert.Equal(3000L, account.BalanceInCents);
     }
@@ -58,7 +58,7 @@ public class AccountTests
     public void Withdraw_InsufficientFunds_ShouldThrowInvalidOperationExceptionAndNotAlterBalance()
     {
         var account = Account.CreateNew("100");
-        account.Deposit(1000L); // $10.00
+        account.Deposit(1000L);
 
         Assert.Throws<InvalidOperationException>(() => account.Withdraw(2000L));
         Assert.Equal(1000L, account.BalanceInCents);
