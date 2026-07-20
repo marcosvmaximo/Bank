@@ -1,8 +1,8 @@
 # =========================
 # .NET / C#
 # =========================
-bin/
-obj/
+**/bin/
+**/obj/
 TestResults/
 *.log
 # Ignora configurações locais/secrets, mas mantém o arquivo base
