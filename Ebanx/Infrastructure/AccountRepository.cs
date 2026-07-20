@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
-using Ebanx.Models;
+using Ebanx.Domain;
 
-namespace Ebanx.Repositories;
+namespace Ebanx.Infrastructure;
 
-public class InMemoryAccountRepository : IAccountRepository
+public class AccountRepository : IAccountRepository
 {
     private readonly ConcurrentDictionary<string, Account> _store = new();
 

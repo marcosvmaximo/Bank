@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Ebanx.DTOs;
+namespace Ebanx.Application.DTOs;
 
 public class EventRequest
 {
