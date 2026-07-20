@@ -5,9 +5,10 @@ namespace Ebanx.Application;
 
 public class TransactionService(IAccountRepository repository, IUnitOfWork unitOfWork)
 {
-    // Fator de conversão: 1 unidade monetária = 100 centavos
     private const long CentsFactor = 100L;
-
+    private static long ToCents(decimal amount) => (long)(amount * CentsFactor);
+    private static decimal ToDecimal(long cents) => cents / (decimal)CentsFactor;
+    
     public EventResponse? ProcessEvent(EventRequest request)
     {
         if (request.Amount <= 0)
@@ -22,6 +23,8 @@ public class TransactionService(IAccountRepository repository, IUnitOfWork unitO
         };
     }
 
+    public void Reset() => repository.Reset();
+    
     public Account Deposit(string destinationId, decimal amount)
     {
         var amountInCents = ToCents(amount);
@@ -103,13 +106,6 @@ public class TransactionService(IAccountRepository repository, IUnitOfWork unitO
         return account is null ? null : ToDecimal(account.BalanceInCents);
     }
 
-    public void Reset() => repository.Reset();
-
-    // Converte decimal → long centavos (fronteira API → domínio)
-    private static long ToCents(decimal amount) => (long)(amount * CentsFactor);
-
-    // Converte long centavos → decimal (fronteira domínio → API)
-    private static decimal ToDecimal(long cents) => cents / (decimal)CentsFactor;
 
     private EventResponse HandleDeposit(EventRequest request)
     {

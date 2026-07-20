@@ -9,7 +9,6 @@ public class UnitOfWork : IUnitOfWork
 
     public T Execute<T>(IEnumerable<string> accountIds, Func<T> operation)
     {
-        // Ordena os IDs para garantir ordem de aquisição de locks consistente — previne deadlock
         var locks = accountIds
             .Distinct()
             .OrderBy(id => id, StringComparer.Ordinal)
@@ -29,7 +28,6 @@ public class UnitOfWork : IUnitOfWork
         }
         finally
         {
-            // Libera de trás para frente, na ordem inversa da aquisição
             for (var i = locksAcquired - 1; i >= 0; i--)
             {
                 Monitor.Exit(locks[i]);
