@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Ebanx.DTOs;
+using Ebanx.Application.DTOs;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Ebanx.Tests.IntegrationTests;
