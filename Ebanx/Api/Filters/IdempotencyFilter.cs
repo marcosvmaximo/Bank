@@ -4,32 +4,46 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Ebanx.Api.Filters;
 
-/// <summary>
-/// Action filter que garante idempotência via header <c>Idempotency-Key</c>.
-/// Registrado como singleton para que o cache persista entre requisições.
-/// </summary>
 public class IdempotencyFilter : IAsyncActionFilter
 {
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _keyLocks = new();
     private readonly ConcurrentDictionary<string, (int StatusCode, object? Body)> _cache = new();
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var key = context.HttpContext.Request.Headers["Idempotency-Key"].FirstOrDefault();
 
-        // Chave já processada → retorna resultado cacheado sem executar o action
-        if (key is not null && _cache.TryGetValue(key, out var cached))
+        if (key is null)
         {
-            context.Result = new ObjectResult(cached.Body) { StatusCode = cached.StatusCode };
+            await next();
             return;
         }
 
-        var executed = await next();
+        var semaphore = _keyLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
 
-        // Armazena o resultado tipado (IActionResult) — sem precisar tocar no stream HTTP
-        if (key is not null && executed.Result is ObjectResult result)
-            _cache[key] = (result.StatusCode ?? StatusCodes.Status200OK, result.Value);
+        await semaphore.WaitAsync();
+        try
+        {
+            if (_cache.TryGetValue(key, out var cached))
+            {
+                context.Result = new ObjectResult(cached.Body) { StatusCode = cached.StatusCode };
+                return;
+            }
+
+            var executed = await next();
+
+            if (executed.Result is ObjectResult result)
+                _cache[key] = (result.StatusCode ?? StatusCodes.Status200OK, result.Value);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
-    /// <summary>Limpa o cache — chamado pelo Reset da aplicação.</summary>
-    public void Reset() => _cache.Clear();
+    public void Reset()
+    {
+        _cache.Clear();
+        _keyLocks.Clear();
+    }
 }

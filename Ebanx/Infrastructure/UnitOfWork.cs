@@ -15,23 +15,16 @@ public class UnitOfWork : IUnitOfWork
             .Select(id => _locks.GetOrAdd(id, _ => new object()))
             .ToArray();
 
-        var locksAcquired = 0;
+        var acquired = 0;
         try
         {
-            foreach (var lockObj in locks)
-            {
-                Monitor.Enter(lockObj);
-                locksAcquired++;
-            }
-
+            foreach (var gate in locks) { Monitor.Enter(gate); acquired++; }
             return operation();
         }
         finally
         {
-            for (var i = locksAcquired - 1; i >= 0; i--)
-            {
+            for (var i = acquired - 1; i >= 0; i--)
                 Monitor.Exit(locks[i]);
-            }
         }
     }
 }
