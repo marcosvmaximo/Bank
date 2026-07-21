@@ -80,6 +80,38 @@ Clears all state. Returns `200 OK`.
 
 ---
 
+## Project Structure
+
+```
+Bank/
+├── Ebanx/
+│   ├── Api/
+│   │   ├── Controllers/EventController.cs
+│   │   └── Filters/IdempotencyFilter.cs
+│   ├── Application/
+│   │   ├── DTOs/
+│   │   └── TransactionService.cs
+│   ├── Domain/
+│   │   ├── Account.cs
+│   │   ├── IAccountRepository.cs
+│   │   └── IUnitOfWork.cs
+│   ├── Infrastructure/
+│   │   ├── AccountRepository.cs
+│   │   ├── InMemoryIdempotencyRepository.cs
+│   │   └── UnitOfWork.cs
+│   └── Program.cs
+└── Ebanx.Tests/
+    ├── UnitTests/
+    │   ├── AccountTests.cs
+    │   ├── TransactionServiceTests.cs
+    │   └── UnitOfWorkTests.cs
+    └── IntegrationTests/
+        ├── EventApiTests.cs
+        └── ConcurrencyTests.cs
+```
+
+---
+
 ## Design Notes
 
 I kept the solution as simple as possible, but introduced a light layer separation that felt proportional to the scope: HTTP transport, business rules, and infrastructure are clearly divided — easy to navigate and extend without over-engineering.
