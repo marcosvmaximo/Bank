@@ -12,18 +12,44 @@ A simple in-memory financial transactions API built with .NET 10. Implements dep
 # Navigate to project root
 cd Bank
 
-# Run the API (listens on http://localhost:5000 by default)
+# Run the API (listens on http://localhost:5270 by default)
 dotnet run --project Ebanx/Ebanx.csproj
 ```
 
-## How to Test
+### Exposing for Automated Evaluator (`ngrok`)
+If you need to expose the local API to the internet to run the EBANX automated evaluator (`ipkiss.pragmazero.com`):
 
 ```bash
-# Run all tests (unit + integration)
+# In a separate terminal while the API is running:
+ngrok http 5270
+```
+Copy the generated `https://xxxx.ngrok-free.app` URL and paste it into the EBANX automated test suite interface.
+
+---
+
+## How to Test
+
+### Automated Test Suite (`xUnit`)
+```bash
+# Run all 43 tests (unit + integration + concurrency)
 dotnet test
 ```
 
-Expected output: **25 tests passing**, 0 failures.
+Expected output: **43 tests passing**, 0 failures.
+
+### Load & Concurrency Testing (`k6`)
+A custom [`k6`](https://grafana.com/docs/k6/latest/) script (`k6_test.js`) is included in the root directory to stress-test race conditions, idempotency, and deadlock freedom against the live running API:
+
+**Prerequisites:** Install k6 (`brew install k6` on macOS).
+
+```bash
+# Make sure the API is running in another terminal (`dotnet run`), then:
+k6 run k6_test.js
+```
+
+The script executes two simultaneous high-concurrency scenarios across **80 Virtual Users (VUs)**:
+1. `idempotency_race_condition`: **50 VUs** concurrently sending 200 requests with the exact same `Idempotency-Key` (`"k6-idempotency-key-2026"`). Verifies that exactly one deposit executes and all remaining concurrent requests safely receive the cached `201 Created` response without double-counting.
+2. `concurrent_transfers_deadlock`: **30 VUs** performing cross-transfers (`A→B` and `B→A`) over 300 iterations. Verifies canonical lock ordering (`UnitOfWork`) prevents deadlocks under heavy contention and maintains state integrity.
 
 ---
 
@@ -75,58 +101,57 @@ Returns `404 0` if origin doesn't exist or has insufficient funds.
 
 ```
 Bank/
-├── Ebanx/                              # Web API project
-│   ├── Controllers/
-│   │   └── EventController.cs          # HTTP dispatcher — zero business logic
-│   ├── DTOs/
-│   │   ├── EventRequest.cs             # Incoming event payload (polymorphic)
-│   │   ├── EventResponse.cs            # Response shape (nullable fields for partial output)
-│   │   └── AccountDto.cs              # Account representation in responses
-│   ├── Models/
-│   │   └── Account.cs                  # Immutable record: Id + Balance
-│   ├── Repositories/
-│   │   ├── IAccountRepository.cs       # Storage contract
-│   │   └── InMemoryAccountRepository.cs # Thread-safe implementation
-│   ├── Services/
-│   │   └── TransactionService.cs       # All business rules live here
-│   └── Program.cs                      # DI wiring + routing
-└── Ebanx.Tests/                        # xUnit test project
+├── Ebanx/                               # Web API project
+│   ├── Api/
+│   │   ├── Controllers/
+│   │   │   └── EventController.cs       # HTTP dispatcher — zero business logic
+│   │   └── Filters/
+│   │       └── IdempotencyFilter.cs     # Thread-safe async check-then-act serialization
+│   ├── Application/
+│   │   ├── DTOs/                        # Polymorphic event payloads & representations
+│   │   └── TransactionService.cs        # Core business rules & input validation
+│   ├── Domain/
+│   │   ├── Account.cs                   # Rich domain model with encapsulation
+│   │   ├── IAccountRepository.cs        # Storage contract
+│   │   └── IUnitOfWork.cs               # Transaction boundary contract
+│   ├── Infrastructure/
+│   │   ├── AccountRepository.cs         # Thread-safe ConcurrentDictionary storage
+│   │   ├── InMemoryIdempotencyRepository.cs
+│   │   └── UnitOfWork.cs                # Canonical ordered lock acquisition
+│   └── Program.cs                       # DI wiring + routing
+└── Ebanx.Tests/                         # xUnit test project
     ├── UnitTests/
-    │   └── TransactionServiceTests.cs  # 13 unit tests — real repository, no mocks
+    │   ├── AccountTests.cs              # Domain invariants & validations
+    │   ├── TransactionServiceTests.cs   # Business logic rules
+    │   └── UnitOfWorkTests.cs           # Lock serialization & exception safety
     └── IntegrationTests/
-        └── EventApiTests.cs            # 12 integration tests — full HTTP pipeline
+        ├── EventApiTests.cs             # Full HTTP lifecycle & state persistence
+        └── ConcurrencyTests.cs          # Deadlock, race condition & stress testing
 ```
 
-**Three layers, no framework magic:**
-- **Controller** — maps HTTP ↔ service calls only. Zero business logic.
-- **Service** — all business rules (sufficient funds, upsert on deposit, input validation).
-- **Repository** — all state management, completely isolated.
+**Four layers following Clean Architecture principles:**
+- **Api** — handles HTTP transport, status codes, and `Idempotency-Key` filter serialization.
+- **Application** — orchestrates operations (`TransactionService`) and validates business invariants.
+- **Domain** — encapsulates core business entities (`Account`) and defines storage/transaction contracts.
+- **Infrastructure** — implements high-performance thread-safe storage and `Monitor`-based `UnitOfWork`.
 
 ---
 
 ## Key Technical Decisions
 
-### In-memory storage with `ConcurrentDictionary`
-The spec requires no persistence. `ConcurrentDictionary<string, decimal>` gives thread-safe reads and writes for independent account operations without a global lock.
+### Thread-Safe Storage with `ConcurrentDictionary`
+The spec requires no database persistence. `ConcurrentDictionary<string, Account>` provides thread-safe reads and atomic lookups without requiring a global application lock.
 
-### Atomic transfers with ordered locks
-A transfer touches two accounts simultaneously. To prevent race conditions, the repository acquires **dedicated lock objects** for both account IDs **in lexicographic order**. This ensures:
-- Two concurrent reverse transfers (A→B and B→A) never deadlock, because both threads always acquire the same lock first.
-- Lock objects are isolated per account — no shared global contention.
+### Atomic Transfers with Canonical Ordered Locking (`UnitOfWork`)
+A financial transfer modifies two accounts simultaneously. To prevent race conditions and deadlocks under heavy contention (`ConcurrencyTests.ConcurrentReverseTransfers_ShouldNotDeadlock`):
+- `UnitOfWork` acquires dedicated `Monitor` lock instances for each account ID.
+- Lock objects are sorted in **canonical lexicographic order** (`StringComparer.Ordinal`) before acquisition. This guarantees that two concurrent threads performing reverse transfers (`A→B` and `B→A`) acquire locks in the exact same order, completely eliminating deadlocks.
 
-> **Why not `lock(string.Intern(id))`?** The CLR's intern pool is global. Locking on interned strings can create contention with other parts of the runtime that intern the same strings. Dedicated `object` instances scoped to each account are the correct approach.
+### Race-Condition-Free Idempotency (`IdempotencyFilter`)
+To support exactly-once processing under high concurrent load:
+- The `IdempotencyFilter` uses a per-key `SemaphoreSlim(1,1)` combined with a double-check locking pattern (`TryGetValue`).
+- When multiple requests arrive simultaneously with the same `Idempotency-Key`, only the first thread executes the operation. Subsequent threads wait for the lock and immediately receive the cached `201 Created` response without duplicating transactions.
 
-### Singleton repository
-Registered as `AddSingleton<IAccountRepository>` so the same in-memory store is shared across all requests for the application lifetime.
+### Read-Only `GET` Operations
+`GetBalance` invokes read-only queries against the repository (`GetById`). It has zero side effects and never mutates internal state.
 
-### Plain numeric responses for balance/errors
-The test script expects `20` and `0` as raw numbers, not JSON objects. The controller returns these as plain `Ok(balance)` / `NotFound(0)`, which ASP.NET serializes as bare values.
-
-### Input validation
-The service layer rejects invalid inputs before touching state:
-- `amount <= 0` → `400 Bad Request`
-- `origin == destination` on transfer → `400 Bad Request`
-- Missing required fields (e.g., no `destination` on deposit) → `400 Bad Request`
-
-### Real repository in unit tests (no mocks)
-Unit tests instantiate a real `InMemoryAccountRepository`. This validates actual state mutations — not just wired return values — aligned with the challenge's requirement that tests prove real behavior changes.
