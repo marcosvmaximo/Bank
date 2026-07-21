@@ -1,6 +1,6 @@
 # EBANX – Financial Transactions API
 
-A simple in-memory financial transactions API built with .NET 10. Implements deposit, withdraw, and transfer operations with thread-safe state management.
+Simple in-memory financial API built with .NET 10. Supports deposit, withdraw and transfer operations.
 
 ---
 
@@ -9,149 +9,83 @@ A simple in-memory financial transactions API built with .NET 10. Implements dep
 **Prerequisites:** .NET 10 SDK
 
 ```bash
-# Navigate to project root
-cd Bank
-
-# Run the API (listens on http://localhost:5270 by default)
 dotnet run --project Ebanx/Ebanx.csproj
 ```
 
-### Exposing for Automated Evaluator (`ngrok`)
-If you need to expose the local API to the internet to run the EBANX automated evaluator (`ipkiss.pragmazero.com`):
+API listens on `http://localhost:5270` by default.
+
+### Exposing via ngrok (for automated evaluator)
+
+**Prerequisites:** [ngrok](https://ngrok.com/download) account + authtoken configured
 
 ```bash
-# In a separate terminal while the API is running:
+ngrok config add-authtoken <your-token>
 ngrok http 5270
 ```
-Copy the generated `https://xxxx.ngrok-free.app` URL and paste it into the EBANX automated test suite interface.
+
+Copy the generated URL and paste it into the EBANX test suite at `ipkiss.pragmazero.com`.
 
 ---
 
 ## How to Test
 
-### Automated Test Suite (`xUnit`)
 ```bash
-# Run all 43 tests (unit + integration + concurrency)
 dotnet test
 ```
 
-Expected output: **43 tests passing**, 0 failures.
+Expected: **43 tests passing**, 0 failures.
 
-### Load & Concurrency Testing (`k6`)
-A custom [`k6`](https://grafana.com/docs/k6/latest/) script (`k6_test.js`) is included in the root directory to stress-test race conditions, idempotency, and deadlock freedom against the live running API:
+### Load & Concurrency Testing (k6)
 
-**Prerequisites:** Install k6 (`brew install k6` on macOS).
+**Prerequisites:** `brew install k6`
 
 ```bash
-# Make sure the API is running in another terminal (`dotnet run`), then:
 k6 run k6_test.js
 ```
 
-The script executes two simultaneous high-concurrency scenarios across **80 Virtual Users (VUs)**:
-1. `idempotency_race_condition`: **50 VUs** concurrently sending 200 requests with the exact same `Idempotency-Key` (`"k6-idempotency-key-2026"`). Verifies that exactly one deposit executes and all remaining concurrent requests safely receive the cached `201 Created` response without double-counting.
-2. `concurrent_transfers_deadlock`: **30 VUs** performing cross-transfers (`A→B` and `B→A`) over 300 iterations. Verifies canonical lock ordering (`UnitOfWork`) prevents deadlocks under heavy contention and maintains state integrity.
+Two concurrent scenarios run simultaneously:
+- **50 VUs** fire 200 requests with the same `Idempotency-Key` — verifies exactly-once execution
+- **30 VUs** run cross-transfers (`A→B` and `B→A`) in parallel — verifies no deadlocks
 
 ---
 
 ## API Reference
 
 ### `POST /reset`
-Clears all account state. Returns `200 OK`.
+Clears all state. Returns `200 OK`.
 
 ### `GET /balance?account_id={id}`
-Returns the account balance. Read-only — no side effects.
-- `200 {balance}` — account exists (e.g. `20`)
-- `404 0` — account does not exist
+- `200 {balance}` — account exists
+- `404 0` — account not found
 
 ### `POST /event`
-Handles financial events. Payload varies by `type`:
 
-**Deposit** — creates account if it doesn't exist:
+**Deposit:**
 ```json
 { "type": "deposit", "destination": "100", "amount": 10 }
 ```
-Response `201`:
-```json
-{ "destination": { "id": "100", "balance": 10 } }
-```
+`201 { "destination": { "id": "100", "balance": 10 } }`
 
-**Withdraw**:
+**Withdraw:**
 ```json
 { "type": "withdraw", "origin": "100", "amount": 5 }
 ```
-Response `201`:
-```json
-{ "origin": { "id": "100", "balance": 15 } }
-```
-Returns `404 0` if account doesn't exist or has insufficient funds.
+`201 { "origin": { "id": "100", "balance": 15 } }` — returns `404 0` if account doesn't exist or insufficient funds.
 
-**Transfer**:
+**Transfer:**
 ```json
 { "type": "transfer", "origin": "100", "destination": "300", "amount": 15 }
 ```
-Response `201`:
-```json
-{ "origin": { "id": "100", "balance": 0 }, "destination": { "id": "300", "balance": 15 } }
-```
-Returns `404 0` if origin doesn't exist or has insufficient funds.
+`201 { "origin": { "id": "100", "balance": 0 }, "destination": { "id": "300", "balance": 15 } }` — returns `404 0` if origin doesn't exist or insufficient funds.
 
 ---
 
-## Architecture
+## Design Notes
 
-```
-Bank/
-├── Ebanx/                               # Web API project
-│   ├── Api/
-│   │   ├── Controllers/
-│   │   │   └── EventController.cs       # HTTP dispatcher — zero business logic
-│   │   └── Filters/
-│   │       └── IdempotencyFilter.cs     # Thread-safe async check-then-act serialization
-│   ├── Application/
-│   │   ├── DTOs/                        # Polymorphic event payloads & representations
-│   │   └── TransactionService.cs        # Core business rules & input validation
-│   ├── Domain/
-│   │   ├── Account.cs                   # Rich domain model with encapsulation
-│   │   ├── IAccountRepository.cs        # Storage contract
-│   │   └── IUnitOfWork.cs               # Transaction boundary contract
-│   ├── Infrastructure/
-│   │   ├── AccountRepository.cs         # Thread-safe ConcurrentDictionary storage
-│   │   ├── InMemoryIdempotencyRepository.cs
-│   │   └── UnitOfWork.cs                # Canonical ordered lock acquisition
-│   └── Program.cs                       # DI wiring + routing
-└── Ebanx.Tests/                         # xUnit test project
-    ├── UnitTests/
-    │   ├── AccountTests.cs              # Domain invariants & validations
-    │   ├── TransactionServiceTests.cs   # Business logic rules
-    │   └── UnitOfWorkTests.cs           # Lock serialization & exception safety
-    └── IntegrationTests/
-        ├── EventApiTests.cs             # Full HTTP lifecycle & state persistence
-        └── ConcurrencyTests.cs          # Deadlock, race condition & stress testing
-```
+I kept the solution as simple as possible, but introduced a light layer separation that felt proportional to the scope: HTTP transport, business rules, and infrastructure are clearly divided — easy to navigate and extend without over-engineering.
 
-**Four layers following Clean Architecture principles:**
-- **Api** — handles HTTP transport, status codes, and `Idempotency-Key` filter serialization.
-- **Application** — orchestrates operations (`TransactionService`) and validates business invariants.
-- **Domain** — encapsulates core business entities (`Account`) and defines storage/transaction contracts.
-- **Infrastructure** — implements high-performance thread-safe storage and `Monitor`-based `UnitOfWork`.
+**Idempotency** was a deliberate addition. It's not in the spec, but it's a real concern in financial systems and felt like the right thing to demonstrate. The `IdempotencyFilter` uses a `SemaphoreSlim(1,1)` per key with double-check locking — so concurrent requests with the same key execute the operation exactly once and return a cached response to the rest.
 
----
+**Concurrency** is handled at two levels. The repository uses `ConcurrentDictionary` for safe structural operations. For multi-account transactions (transfers), I built a `UnitOfWork` that acquires `Monitor` locks in canonical lexicographic order. This eliminates deadlocks — two threads doing `A→B` and `B→A` simultaneously always acquire locks in the same order.
 
-## Key Technical Decisions
-
-### Thread-Safe Storage with `ConcurrentDictionary`
-The spec requires no database persistence. `ConcurrentDictionary<string, Account>` provides thread-safe reads and atomic lookups without requiring a global application lock.
-
-### Atomic Transfers with Canonical Ordered Locking (`UnitOfWork`)
-A financial transfer modifies two accounts simultaneously. To prevent race conditions and deadlocks under heavy contention (`ConcurrencyTests.ConcurrentReverseTransfers_ShouldNotDeadlock`):
-- `UnitOfWork` acquires dedicated `Monitor` lock instances for each account ID.
-- Lock objects are sorted in **canonical lexicographic order** (`StringComparer.Ordinal`) before acquisition. This guarantees that two concurrent threads performing reverse transfers (`A→B` and `B→A`) acquire locks in the exact same order, completely eliminating deadlocks.
-
-### Race-Condition-Free Idempotency (`IdempotencyFilter`)
-To support exactly-once processing under high concurrent load:
-- The `IdempotencyFilter` uses a per-key `SemaphoreSlim(1,1)` combined with a double-check locking pattern (`TryGetValue`).
-- When multiple requests arrive simultaneously with the same `Idempotency-Key`, only the first thread executes the operation. Subsequent threads wait for the lock and immediately receive the cached `201 Created` response without duplicating transactions.
-
-### Read-Only `GET` Operations
-`GetBalance` invokes read-only queries against the repository (`GetById`). It has zero side effects and never mutates internal state.
-
+The k6 script exists to prove this works in practice, not just in unit tests. Running it against the live server with 80 virtual users and checking the final balance tells the real story.
