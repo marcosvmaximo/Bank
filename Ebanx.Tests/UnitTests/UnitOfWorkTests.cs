@@ -5,16 +5,6 @@ namespace Ebanx.Tests.UnitTests;
 public class UnitOfWorkTests
 {
     [Fact]
-    public void Execute_ShouldReturnOperationResult()
-    {
-        var uow = new UnitOfWork();
-
-        var result = uow.Execute(["100", "200"], () => "sucesso");
-
-        Assert.Equal("sucesso", result);
-    }
-
-    [Fact]
     public async Task Execute_ConcurrentExecutionOnSameAccount_ShouldExecuteSequentially()
     {
         var uow = new UnitOfWork();

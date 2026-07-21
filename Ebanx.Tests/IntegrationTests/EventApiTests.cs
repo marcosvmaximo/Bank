@@ -179,21 +179,51 @@ public class EventApiTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task FullFlow_DepositWithdrawTransfer_MaintainsConsistentState()
+    public async Task OfficialChallengeSpec_Walkthrough_ShouldMatchExactExpectedResponses()
     {
-        await ResetAsync();
+        var resetRes = await _client.PostAsync("/reset", null);
+        Assert.Equal(HttpStatusCode.OK, resetRes.StatusCode);
 
-        await PostEventAsync(new { type = "deposit", destination = "100", amount = 100 });
-        await PostEventAsync(new { type = "deposit", destination = "200", amount = 50 });
+        var get1234Res = await _client.GetAsync("/balance?account_id=1234");
+        Assert.Equal(HttpStatusCode.NotFound, get1234Res.StatusCode);
+        Assert.Equal("0", await GetBodyAsync(get1234Res));
 
-        await PostEventAsync(new { type = "withdraw", origin = "100", amount = 30 });
+        var dep1Res = await PostEventAsync(new { type = "deposit", destination = "100", amount = 10 });
+        Assert.Equal(HttpStatusCode.Created, dep1Res.StatusCode);
+        var dep1Json = JsonDocument.Parse(await GetBodyAsync(dep1Res)).RootElement;
+        Assert.Equal("100", dep1Json.GetProperty("destination").GetProperty("id").GetString());
+        Assert.Equal(10, dep1Json.GetProperty("destination").GetProperty("balance").GetDecimal());
 
-        await PostEventAsync(new { type = "transfer", origin = "100", destination = "200", amount = 20 });
+        var dep2Res = await PostEventAsync(new { type = "deposit", destination = "100", amount = 10 });
+        Assert.Equal(HttpStatusCode.Created, dep2Res.StatusCode);
+        var dep2Json = JsonDocument.Parse(await GetBodyAsync(dep2Res)).RootElement;
+        Assert.Equal("100", dep2Json.GetProperty("destination").GetProperty("id").GetString());
+        Assert.Equal(20, dep2Json.GetProperty("destination").GetProperty("balance").GetDecimal());
 
-        var balance100 = await _client.GetAsync("/balance?account_id=100");
-        var balance200 = await _client.GetAsync("/balance?account_id=200");
+        var get100Res = await _client.GetAsync("/balance?account_id=100");
+        Assert.Equal(HttpStatusCode.OK, get100Res.StatusCode);
+        Assert.Equal("20", await GetBodyAsync(get100Res));
 
-        Assert.Equal("50", await GetBodyAsync(balance100));
-        Assert.Equal("70", await GetBodyAsync(balance200));
+        var wit200Res = await PostEventAsync(new { type = "withdraw", origin = "200", amount = 10 });
+        Assert.Equal(HttpStatusCode.NotFound, wit200Res.StatusCode);
+        Assert.Equal("0", await GetBodyAsync(wit200Res));
+
+        var wit100Res = await PostEventAsync(new { type = "withdraw", origin = "100", amount = 5 });
+        Assert.Equal(HttpStatusCode.Created, wit100Res.StatusCode);
+        var wit100Json = JsonDocument.Parse(await GetBodyAsync(wit100Res)).RootElement;
+        Assert.Equal("100", wit100Json.GetProperty("origin").GetProperty("id").GetString());
+        Assert.Equal(15, wit100Json.GetProperty("origin").GetProperty("balance").GetDecimal());
+
+        var trans1Res = await PostEventAsync(new { type = "transfer", origin = "100", amount = 15, destination = "300" });
+        Assert.Equal(HttpStatusCode.Created, trans1Res.StatusCode);
+        var trans1Json = JsonDocument.Parse(await GetBodyAsync(trans1Res)).RootElement;
+        Assert.Equal("100", trans1Json.GetProperty("origin").GetProperty("id").GetString());
+        Assert.Equal(0, trans1Json.GetProperty("origin").GetProperty("balance").GetDecimal());
+        Assert.Equal("300", trans1Json.GetProperty("destination").GetProperty("id").GetString());
+        Assert.Equal(15, trans1Json.GetProperty("destination").GetProperty("balance").GetDecimal());
+
+        var trans2Res = await PostEventAsync(new { type = "transfer", origin = "200", amount = 15, destination = "300" });
+        Assert.Equal(HttpStatusCode.NotFound, trans2Res.StatusCode);
+        Assert.Equal("0", await GetBodyAsync(trans2Res));
     }
 }

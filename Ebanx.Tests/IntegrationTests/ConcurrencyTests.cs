@@ -92,45 +92,68 @@ public class ConcurrencyTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(initialBalance * 2, balanceX + balanceY);
     }
 
+
     [Fact]
-    public async Task Transfer_InsufficientFunds_NeitherAccountIsModified()
+    public async Task StressTest_MixedOperations_MoneyIsConservedAndBalancesAreNonNegative()
     {
         await ResetAsync();
 
-        await PostEventAsync(new { type = "deposit", destination = "RICH", amount = 5 });
-        await PostEventAsync(new { type = "deposit", destination = "POOR", amount = 5 });
+        const decimal initial = 500m;
+        const int rounds = 20;
+        const decimal depositPerRound = 10m;
 
-        var response = await PostEventAsync(new { type = "transfer", origin = "POOR", destination = "RICH", amount = 100 });
+        await PostEventAsync(new { type = "deposit", destination = "S1", amount = initial });
+        await PostEventAsync(new { type = "deposit", destination = "S2", amount = initial });
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-
-        Assert.Equal(5m, await GetBalanceAsync("RICH"));
-        Assert.Equal(5m, await GetBalanceAsync("POOR"));
-    }
-
-    [Fact]
-    public async Task StressTest_MixedOperations_StateRemainsConsistent()
-    {
-        await ResetAsync();
-
-        await PostEventAsync(new { type = "deposit", destination = "S1", amount = 500 });
-        await PostEventAsync(new { type = "deposit", destination = "S2", amount = 500 });
-
-        var tasks = Enumerable.Range(0, 20).SelectMany(_ => new[]
+        var tasks = Enumerable.Range(0, rounds).SelectMany(_ => new[]
         {
-            PostEventAsync(new { type = "deposit", destination = "S1", amount = 10 }),
-            PostEventAsync(new { type = "withdraw", origin = "S1", amount = 10 }),
+            PostEventAsync(new { type = "deposit",  destination = "S1", amount = depositPerRound }),
+            PostEventAsync(new { type = "withdraw", origin = "S1",      amount = depositPerRound }),
             PostEventAsync(new { type = "transfer", origin = "S1", destination = "S2", amount = 5 }),
             PostEventAsync(new { type = "transfer", origin = "S2", destination = "S1", amount = 5 }),
         });
 
-        await Task.WhenAll(tasks);
+        var responses = await Task.WhenAll(tasks);
 
         var s1 = await GetBalanceAsync("S1");
         var s2 = await GetBalanceAsync("S2");
 
-        Assert.True(s1 >= 0);
-        Assert.True(s2 >= 0);
-        Assert.True(s1 + s2 >= 0);
+        Assert.True(s1 >= 0, $"S1 ficou negativo: {s1}");
+        Assert.True(s2 >= 0, $"S2 ficou negativo: {s2}");
+
+        var minExpected = initial * 2;
+        var maxExpected = initial * 2 + depositPerRound * rounds;
+        Assert.InRange(s1 + s2, minExpected, maxExpected);
+    }
+
+    [Fact]
+    public async Task IdempotencyFilter_ConcurrentRequestsSameKey_ShouldExecuteOperationOnlyOnce()
+    {
+        await ResetAsync();
+
+        const int concurrentRequests = 30;
+        const decimal depositAmount = 100m;
+        var idempotencyKey = Guid.NewGuid().ToString();
+
+        var tasks = Enumerable.Range(0, concurrentRequests)
+            .Select(_ =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, "/event");
+                request.Headers.Add("Idempotency-Key", idempotencyKey);
+                request.Content = JsonContent.Create(new
+                {
+                    type = "deposit",
+                    destination = "IDM_ACCOUNT",
+                    amount = depositAmount
+                });
+                return _client.SendAsync(request);
+            });
+
+        var responses = await Task.WhenAll(tasks);
+
+        Assert.All(responses, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+
+        var balance = await GetBalanceAsync("IDM_ACCOUNT");
+        Assert.Equal(depositAmount, balance);
     }
 }

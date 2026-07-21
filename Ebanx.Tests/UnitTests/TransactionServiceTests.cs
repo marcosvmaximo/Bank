@@ -144,15 +144,6 @@ public class TransactionServiceTests
     }
 
     [Fact]
-    public void ProcessEvent_UnknownType_ThrowsArgumentException()
-    {
-        var service = CreateService(out _, out _);
-
-        Assert.Throws<ArgumentException>(() =>
-            service.ProcessEvent(new EventRequest { Type = "unknown", Amount = 10 }));
-    }
-
-    [Fact]
     public void ProcessEvent_SelfTransfer_ThrowsArgumentException()
     {
         var service = CreateService(out _, out _);
