@@ -88,4 +88,6 @@ I kept the solution as simple as possible, but introduced a light layer separati
 
 **Concurrency** is handled at two levels. The repository uses `ConcurrentDictionary` for safe structural operations. For multi-account transactions (transfers), I built a `UnitOfWork` that acquires `Monitor` locks in canonical lexicographic order. This eliminates deadlocks — two threads doing `A→B` and `B→A` simultaneously always acquire locks in the same order.
 
+**Balance storage as `long` (integer cents)** — I asked a colleague at EBANX and was told they use `decimal` internally. I still went with `long` (e.g. `$10.50` stored as `1050`). The reason: integer arithmetic has no rounding errors by definition, is faster, and enables lock-free atomic operations via `Interlocked` if needed in the future. The conversion to `decimal` only happens at the API boundary for display. It's a trade-off, but a deliberate one.
+
 The k6 script exists to prove this works in practice, not just in unit tests. Running it against the live server with 80 virtual users and checking the final balance tells the real story.
